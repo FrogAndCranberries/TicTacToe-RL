@@ -2,7 +2,7 @@ import numpy as np
 import torch as t
 import tqdm
 from enum import Enum, auto
-# from typing import List, Tuple
+from scipy.signal import convolve2d
 
 class Game_result(Enum):
     Undecided = auto()
@@ -26,7 +26,7 @@ class Ttt_Game:
         self.terminal = False
         self.result = Game_result.Undecided
 
-    def Add_symbol(self, row:int, column:int, symbol:Symbol) -> None:
+    def add_symbol(self, row:int, column:int, symbol:Symbol) -> None:
         if not 0 <= row < self.size:
             raise IndexError(f"Invalid row index to play at: {row}.")
         if not 0 <= column < self.size:
@@ -35,106 +35,38 @@ class Ttt_Game:
             raise IndexError(f"Played in an occupied square at ({row}, {column}).")
         self.board[row, column] = symbol.value
 
-    def Evaluate_game_v1(self) -> Game_result:
-        for i in range(self.size):
-            for j in range(self.size - self.streak + 1):
-                if self.board[i,j] == 0:
-                    continue
-                if np.all(self.board[i,j:j+self.streak] == self.board[i,j]):
-                    self.terminal = True
-                    if self.board[i,j] == Symbol.X.value: 
-                        self.result = Game_result.Won_X
-                    else:
-                        self.result = Game_result.Won_O
-                    return self.result
+    def evaluate_game(self) -> Game_result:
 
-        for i in range(self.size - self.streak + 1):
-            for j in range(self.size):
-                if self.board[i,j] == 0:
-                    continue
-                if np.all(self.board[i:i+self.streak,j] == self.board[i,j]):
-                    self.terminal = True
-                    if self.board[i,j] == Symbol.X.value: 
-                        self.result = Game_result.Won_X
-                    else:
-                        self.result = Game_result.Won_O
-                    return self.result
+        def check_for_win(bool_board:np.ndarray) -> bool:
+            horizontal = convolve2d(bool_board, np.ones((self.streak,1),dtype=int), mode="valid")
+            vertical = convolve2d(bool_board, np.ones((1,self.streak),dtype=int), mode="valid")
+            diagonal = convolve2d(bool_board, np.eye((self.streak,),dtype=int), mode="valid")
+            anti_diagonal = convolve2d(bool_board, np.fliplr(np.eye((self.streak,),dtype=int)), mode="valid")
 
-        for i in range(self.size - self.streak + 1):
-            for j in range(self.size - self.streak + 1):
-                if self.board[i,j] == 0:
-                    continue
-                if np.all((self.board[i+offset,j+offset] for offset in range(self.streak)) == self.board[i,j]):
-                    self.terminal = True
-                    if self.board[i,j] == Symbol.X.value: 
-                        self.result = Game_result.Won_X
-                    else:
-                        self.result = Game_result.Won_O
-                    return self.result
+            return (np.any(horizontal == self.streak) or 
+                    np.any(vertical == self.streak) or 
+                    np.any(diagonal == self.streak) or 
+                    np.any(anti_diagonal == self.streak))
+        
+        board_X = self.board == Symbol.X
+        board_O = self.board == Symbol.O
 
-
-        if np.all(self.board != 0) and self.result == Game_result.Undecided:
+        if check_for_win(board_X):
+            self.terminal = True
+            self.result = Game_result.Won_X
+            return self.result
+        
+        if check_for_win(board_O):
+            self.terminal = True
+            self.result = Game_result.Won_O
+            return self.result
+        
+        if not np.any(self.board == 0):
             self.terminal = True
             self.result = Game_result.Drawn
         return self.result
     
-    def Evaluate_game_v2(self) -> Game_result:
-        for i in range(self.size - self.streak + 1):
-            for j in range(self.size - self.streak + 1):
-                if self.board[i,j] == 0:
-                    continue
-                if (np.all(self.board[i,j:j+self.streak] == self.board[i,j]) or 
-                    np.all(self.board[i:i+self.streak,j] == self.board[i,j]) or 
-                    np.all(np.array(self.board[i+offset,j+offset] for offset in range(self.streak)) == self.board[i,j])):
-                    self.terminal = True
-                    if self.board[i,j] == Symbol.X.value:
-                        self.result = Game_result.Won_X
-                    else:
-                        self.result = Game_result.Won_O
-                    return self.result
-
-        for i in range(self.size - self.streak + 1, self.size):
-            for j in range(self.size - self.streak + 1):
-                if self.board[i,j] == 0:
-                    continue
-                if np.all(self.board[i,j:j+self.streak] == self.board[i,j]):
-                    self.terminal = True
-                    if self.board[i,j] == Symbol.X.value: 
-                        self.result = Game_result.Won_X
-                    else:
-                        self.result = Game_result.Won_O
-                    return self.result
-
-        for i in range(self.size - self.streak + 1):
-            for j in range(self.size - self.streak + 1, self.size):
-                if self.board[i,j] == 0:
-                    continue
-                if np.all(self.board[i:i+self.streak,j] == self.board[i,j]):
-                    self.terminal = True
-                    if self.board[i,j] == Symbol.X.value: 
-                        self.result = Game_result.Won_X
-                    else:
-                        self.result = Game_result.Won_O
-                    return self.result
-
-        for i in range(self.size - self.streak + 1):
-            for j in range(self.streak - 1, self.size):
-                if self.board[i,j] == 0:
-                    continue
-                if np.all(np.array(self.board[i+offset,j-offset] for offset in range(self.streak)) == self.board[i,j]):
-                    self.terminal = True
-                    if self.board[i,j] == Symbol.X.value:
-                        self.result = Game_result.Won_X
-                    else:
-                        self.result = Game_result.Won_O
-                    return self.result
-
-        if np.all(self.board != 0) and self.result == Game_result.Undecided:
-            self.terminal = True
-            self.result = Game_result.Drawn
-        return self.result
-    
-    def Is_valid_move(self, row:int, column:int) -> bool:
+    def is_valid_move(self, row:int, column:int) -> bool:
         if not 0 <= row < self.size:
             return False
         if not 0 <= column < self.size:
@@ -143,7 +75,7 @@ class Ttt_Game:
             return False
         return True
 
-    def Valid_moves(self) -> np.ndarray[np.ndarray]:
+    def get_valid_moves(self) -> np.ndarray[np.ndarray]:
         # print(np.indices(self.board))
         indices = np.where(self.board == 0)
         stacked_indices = np.transpose(np.vstack(indices))
@@ -162,17 +94,17 @@ class Ttt_environment:
         self.terminal = False
         self.result = Game_result.Undecided
 
-    def Reset(self) -> np.ndarray:
+    def reset(self) -> np.ndarray:
         self.game = Ttt_Game(self.size, self.streak)
         self.terminal = False
         self.result = Game_result.Undecided
         return self.game.board.flatten()
         
 
-    def Get_observation(self) -> np.ndarray:
+    def get_observation(self) -> np.ndarray:
         return self.game.board.flatten()
     
-    def Get_reward(self) -> t.float16:
+    def get_reward(self) -> t.float16:
         match self.result:
             case Game_result.Undecided:
                 return 0
@@ -190,7 +122,7 @@ class Ttt_environment:
                     return -10 
             
     
-    def Action(self, row:int, col:int, symbol:Symbol) -> tuple[np.ndarray, t.float16, bool]:
+    def action(self, row:int, col:int, symbol:Symbol) -> tuple[np.ndarray, t.float16, bool]:
         
         if symbol != self.symbol_to_play:
             raise Exception(f"Wrong symbol to play: got {symbol} but expected {self.symbol_to_play}.")
@@ -208,7 +140,7 @@ class Ttt_environment:
     
 
 
-def Main():
+def main():
     game = Ttt_Game(200,3)
     game.Add_symbol(1,2,Symbol.X)
     print(game.board)
@@ -225,5 +157,5 @@ def Main():
 
 
 if __name__ == "__main__":
-    Main()
+    main()
 
