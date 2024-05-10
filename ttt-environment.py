@@ -11,6 +11,7 @@ class Game_result(Enum):
     Drawn = auto()
 
 class Symbol(Enum):
+    Empty = 0
     X = -1
     O = 1
 
@@ -22,7 +23,7 @@ class Ttt_Game:
             raise AttributeError(f"TTT Game board of size {size} cannot be smaller than the streak {streak}.")
         self.size = size
         self.streak = streak
-        self.board = np.zeros((size, size), dtype=int)
+        self.board = np.full((size, size), Symbol.Empty.value, dtype=int)
         self.terminal = False
         self.result = Game_result.Undecided
 
@@ -31,7 +32,7 @@ class Ttt_Game:
             raise IndexError(f"Invalid row index to play at: {row}.")
         if not 0 <= column < self.size:
             raise IndexError(f"Invalid column index to play at: {column}.")
-        if self.board[row, column] != 0:
+        if self.board[row, column] != Symbol.Empty.value:
             raise IndexError(f"Played in an occupied square at ({row}, {column}).")
         self.board[row, column] = symbol.value
 
@@ -61,7 +62,7 @@ class Ttt_Game:
             self.result = Game_result.Won_O
             return self.result
         
-        if not np.any(self.board == 0):
+        if not np.any(self.board == Symbol.Empty.value):
             self.terminal = True
             self.result = Game_result.Drawn
         return self.result
@@ -71,13 +72,13 @@ class Ttt_Game:
             return False
         if not 0 <= column < self.size:
             return False
-        if self.board[row, column] != 0:
+        if self.board[row, column] != Symbol.Empty.value:
             return False
         return True
 
     def get_valid_moves(self) -> np.ndarray[np.ndarray]:
         # print(np.indices(self.board))
-        indices = np.where(self.board == 0)
+        indices = np.where(self.board == Symbol.Empty.value)
         stacked_indices = np.transpose(np.vstack(indices))
         return stacked_indices
     
@@ -107,19 +108,19 @@ class Ttt_environment:
     def get_reward(self) -> t.float16:
         match self.result:
             case Game_result.Undecided:
-                return 0
+                return self.reward_values["valid_move"]
             case Game_result.Drawn:
-                return -1
+                return self.reward_values["draw"]
             case Game_result.Won_O:
                 if self.player_symbol == Symbol.O:
-                    return 10
+                    return self.reward_values["win"]
                 else:
-                    return -10
+                    return self.reward_values["loss"]
             case Game_result.Won_X:
                 if self.player_symbol == Symbol.X:
-                    return 10
+                    return self.reward_values["win"]
                 else:
-                    return -10 
+                    return self.reward_values["loss"]
             
     
     def action(self, row:int, col:int, symbol:Symbol) -> tuple[np.ndarray, t.float16, bool]:
