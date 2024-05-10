@@ -3,6 +3,7 @@ import torch as t
 import tqdm
 from enum import Enum, auto
 from scipy.signal import convolve2d
+from dataclasses import dataclass
 
 class Game_result(Enum):
     Undecided = auto()
@@ -15,7 +16,14 @@ class Symbol(Enum):
     X = -1
     O = 1
 
+@dataclass
+class Action:
+    row:int
+    column:int
+    symbol:Symbol
+
 class Ttt_Game:
+    
     __slots__ = ["size", "streak", "board", "terminal", "result"]
 
     def __init__(self, size:int, streak:int):
@@ -27,14 +35,8 @@ class Ttt_Game:
         self.terminal = False
         self.result = Game_result.Undecided
 
-    def add_symbol(self, row:int, column:int, symbol:Symbol) -> None:
-        if not 0 <= row < self.size:
-            raise IndexError(f"Invalid row index to play at: {row}.")
-        if not 0 <= column < self.size:
-            raise IndexError(f"Invalid column index to play at: {column}.")
-        if self.board[row, column] != Symbol.Empty.value:
-            raise IndexError(f"Played in an occupied square at ({row}, {column}).")
-        self.board[row, column] = symbol.value
+    def play(self, action:Action) -> None:
+        self.board[action.row, action.column] = action.symbol.value
 
     def evaluate_game(self) -> Game_result:
 
@@ -67,12 +69,12 @@ class Ttt_Game:
             self.result = Game_result.Drawn
         return self.result
     
-    def is_valid_move(self, row:int, column:int) -> bool:
-        if not 0 <= row < self.size:
+    def is_valid_move(self, action:Action) -> bool:
+        if not 0 <= action.row < self.size:
             return False
-        if not 0 <= column < self.size:
+        if not 0 <= action.column < self.size:
             return False
-        if self.board[row, column] != Symbol.Empty.value:
+        if self.board[action.row, action.column] != Symbol.Empty.value:
             return False
         return True
 
@@ -83,6 +85,7 @@ class Ttt_Game:
         return stacked_indices
     
 class Ttt_environment:
+
     def __init__(self, size:int, streak:int, first_player:Symbol = Symbol.X, single_player:bool = True, reward_values:dict = {"valid_move": 0, "invalid_move": -10, "draw": -1, "win": 10, "loss": -10}):
         self.game = Ttt_Game(size, streak)
         self.size = size
@@ -96,16 +99,21 @@ class Ttt_environment:
         self.result = Game_result.Undecided
 
     def reset(self) -> np.ndarray:
+
         self.game = Ttt_Game(self.size, self.streak)
         self.terminal = False
         self.result = Game_result.Undecided
-        return self.game.board.flatten()
+        observation = self.get_observation()
+
+        return observation
         
 
     def get_observation(self) -> np.ndarray:
+
         return self.game.board.flatten()
     
     def get_reward(self) -> t.float16:
+
         match self.result:
             case Game_result.Undecided:
                 return self.reward_values["valid_move"]
@@ -123,36 +131,32 @@ class Ttt_environment:
                     return self.reward_values["loss"]
             
     
-    def action(self, row:int, col:int, symbol:Symbol) -> tuple[np.ndarray, t.float16, bool]:
+    def next_obs(self, action:Action) -> tuple[np.ndarray, t.float16, bool]:
         
-        if symbol != self.symbol_to_play:
-            raise Exception(f"Wrong symbol to play: got {symbol} but expected {self.symbol_to_play}.")
-        if not self.game.Is_valid_move(row, col):
+        # Action validity checks
+        if action.symbol != self.symbol_to_play:
+            raise Exception(f"Wrong symbol to play: got {action.symbol} but expected {self.symbol_to_play}.")
+        if not self.game.is_valid_move(action):
             return self.game.board.flatten(), self.reward_values["invalid_move"], self.terminal
-        self.game.Add_symbol(row, col, symbol)
-        self.result = self.game.Evaluate_game_v1()
+        
+        # Play and get new observation, reward, and terminal flag 
+        self.game.play(action)
+
+        self.result = self.game.evaluate_game()
         self.terminal = self.game.terminal
+        reward = self.get_reward()
+        observation = self.get_observation()
 
-
-
-        reward = self.Get_reward()
-        return self.game.board.flatten(), reward, self.terminal
+        return observation, reward, self.terminal
 
     
 
 
 def main():
-    game = Ttt_Game(200,3)
-    game.Add_symbol(1,2,Symbol.X)
-    print(game.board)
-    print(game.Valid_moves())
-    print(game.Evaluate_game_v2())
-    game.Add_symbol(0,2,Symbol.X)
-    print(game.Evaluate_game_v2())
 
-    game.Add_symbol(2,2,Symbol.X)
+    game = Ttt_Game(10,4)
+    game.add_symbol(1,2,Symbol.X)
     print(game.board)
-    print(game.Evaluate_game_v2())
 
 
 
