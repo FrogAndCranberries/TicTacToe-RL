@@ -1,6 +1,5 @@
 import numpy as np
 import torch as t
-import tqdm
 from enum import Enum, auto
 from scipy.signal import convolve2d
 from dataclasses import dataclass
@@ -107,8 +106,14 @@ class Ttt_environment_singleplayer:
         
 
     def get_observation(self) -> np.ndarray:
+        
+        empty_layer = self.game.board == Symbol.Empty.value
+        X_layer = self.game.board == Symbol.X.value
+        O_layer = self.game.board == Symbol.O.value
 
-        return self.game.board.flatten()
+        observation = np.stack((empty_layer, X_layer, O_layer), axis=0)
+
+        return observation
     
     def get_reward(self) -> t.float16:
 
