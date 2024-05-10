@@ -23,7 +23,7 @@ class Action:
     symbol:Symbol
 
 class Ttt_Game:
-    
+
     __slots__ = ["size", "streak", "board", "terminal", "result"]
 
     def __init__(self, size:int, streak:int):
@@ -84,16 +84,14 @@ class Ttt_Game:
         stacked_indices = np.transpose(np.vstack(indices))
         return stacked_indices
     
-class Ttt_environment:
+class Ttt_environment_singleplayer:
 
-    def __init__(self, size:int, streak:int, first_player:Symbol = Symbol.X, single_player:bool = True, reward_values:dict = {"valid_move": 0, "invalid_move": -10, "draw": -1, "win": 10, "loss": -10}):
+    def __init__(self, size:int, streak:int, player_symbol:Symbol = Symbol.X, reward_values:dict = {"valid_move": 0, "invalid_move": -10, "draw": -1, "win": 10, "loss": -10}):
         self.game = Ttt_Game(size, streak)
         self.size = size
         self.streak = streak
         self.obs_shape = size ** 2
-        self.single_player = single_player
-        self.player_symbol = first_player
-        self.symbol_to_play = first_player
+        self.player_symbol = player_symbol
         self.reward_values = reward_values
         self.terminal = False
         self.result = Game_result.Undecided
@@ -134,22 +132,35 @@ class Ttt_environment:
     def next_obs(self, action:Action) -> tuple[np.ndarray, t.float16, bool]:
         
         # Action validity checks
-        if action.symbol != self.symbol_to_play:
-            raise Exception(f"Wrong symbol to play: got {action.symbol} but expected {self.symbol_to_play}.")
+        if action.symbol != self.player_symbol:
+            raise Exception(f"Wrong symbol to play: got {action.symbol} but expected {self.player_symbol}.")
         if not self.game.is_valid_move(action):
             return self.game.board.flatten(), self.reward_values["invalid_move"], self.terminal
         
-        # Play and get new observation, reward, and terminal flag 
+        # Play against a random opponent and get new observation, reward, and terminal flag 
         self.game.play(action)
 
         self.result = self.game.evaluate_game()
         self.terminal = self.game.terminal
+
+        if not self.terminal:
+            random_action = self.get_random_action()
+            self.game.play(random_action)
+
+            self.result = self.game.evaluate_game()
+            self.terminal = self.game.terminal
+        
         reward = self.get_reward()
         observation = self.get_observation()
 
         return observation, reward, self.terminal
 
-    
+    def get_random_action(self):
+        valid_moves = self.game.get_valid_moves()
+        random_move = np.random.choice(valid_moves)
+        return Action(random_move[0], random_move[1], Symbol(self.player_symbol.value * -1))
+
+
 
 
 def main():
